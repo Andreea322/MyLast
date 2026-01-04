@@ -1,0 +1,37 @@
+#!/bin/bash
+
+LOGS="/var/log/auth.log /var/log/auth.log.[1-4]"
+
+grep -h "pam_unix(login:session): session" $LOGS 2>/dev/null  | while read line; do
+
+    user=$(echo "$line" | awk '{for(i=1;i<=NF;i++) if($i=="user") print $(i+1)}')
+
+    terminal=$(echo "$line" | grep -o 'TTY=[^ ;]*' | cut -d= -f2)
+    [ -z "$terminal" ] && terminal="LOCAL"
+
+    ip=$(echo "$line" | grep -oE 'from [0-9.]*' | awk '{print $2}')
+    [ -z "$ip" ] && ip="N/A"
+
+    timp_start=$(echo "$line" | awk '{print $1}')
+
+    pid=$(echo "$line" | awk '{print $3}')
+
+    linie_oprire=$(grep "session closed" $LOGS 2>/dev/null | grep "$pid")
+
+    if [ -n "$linie_oprire" ]; then
+
+        timp_oprire=$(echo "$linie_oprire" | awk '{print $1}')
+
+        start_sec=$(date -d "$timp_start" +%s)
+        stop_sec=$(date -d "$timp_oprire" +%s)
+
+        diff_sec=$((stop_sec - start_sec))
+        ore=$((diff_sec / 3600))
+        minute=$(((diff_sec % 3600) / 60))
+
+        echo "USER=$user | TERMINAL=$terminal | IP=$ip | $(date -d "$timp_start" '+%a %b %d %H:%M') - $(date -d "$timp_oprire" '+%H:%M') ($ore:$minute)"
+    else
+        echo "USER=$user | TERMINAL=$terminal | IP=$ip | $(date -d "$timp_start" '+%a %b %d %H:%M') - still running"
+    fi
+
+done
